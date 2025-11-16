@@ -56,9 +56,8 @@ int main() {
         std::string command = cmdBuffer;
         std::cout << "[서버] 받은 명령: " << command << "\n";
 
-        // ---------------------------
+
         // LIST 처리
-        // ---------------------------
         if (command == "list") {
             auto files = getFileList();
 
