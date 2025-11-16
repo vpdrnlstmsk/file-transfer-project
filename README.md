@@ -1,4 +1,4 @@
-# file-transfer-project
+# file-transfer-project Server
 ```cpp
 // server.cpp : list + get 기능 포함 서버 코드
 
