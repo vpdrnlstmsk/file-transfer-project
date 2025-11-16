@@ -1,5 +1,6 @@
 # file-transfer-project
 // server.cpp : list + get 기능 포함 서버 코드
+
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <winsock2.h>
 #include <iostream>
@@ -8,7 +9,6 @@
 #include <string>
 #include <filesystem>
 namespace fs = std::filesystem;
-
 #pragma comment(lib, "ws2_32.lib")
 
 std::vector<std::string> getFileList() {
