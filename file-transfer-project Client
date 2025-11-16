@@ -1,0 +1,70 @@
+file-transfer-project Client
+```cpp
+// client.cpp : list + get 기능 포함
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include <winsock2.h>
+#include <iostream>
+#include <fstream>
+#include <string>
+
+#pragma comment(lib, "ws2_32.lib")
+
+int main() {
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+    SOCKET clientSock = socket(AF_INET, SOCK_STREAM, 0);
+
+    sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    serverAddr.sin_port = htons(9000);
+
+    if (connect(clientSock, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        std::cerr << "[클라이언트] 서버 연결 실패\n";
+        return 1;
+    }
+
+    std::cout << "[클라이언트] 서버 연결됨\n";
+
+    while (true) {
+        std::string cmd;
+        std::cout << "\n명령 입력 (list / get 파일명 / quit): ";
+        std::getline(std::cin, cmd);
+
+        if (cmd == "quit") break;
+
+        // 서버로 명령 전송
+        send(clientSock, cmd.c_str(), cmd.size(), 0);
+
+        char buffer[1024];
+        int bytes;
+
+        // LIST 명령 처리
+        if (cmd == "list") {
+            std::cout << "\n[서버 파일 목록]\n";
+            bytes = recv(clientSock, buffer, sizeof(buffer) - 1, 0);
+            buffer[bytes] = 0;
+            std::cout << buffer;
+        }
+
+        // GET 명령 처리
+        else if (cmd.rfind("get ", 0) == 0) {
+            std::string filename = cmd.substr(4);
+            std::ofstream out(filename, std::ios::binary);
+
+            while ((bytes = recv(clientSock, buffer, sizeof(buffer), 0)) > 0) {
+                out.write(buffer, bytes);
+                if (bytes < 1024) break;  // 파일 끝 추정
+            }
+
+            out.close();
+            std::cout << "[클라이언트] 파일 수신 완료 → " << filename << "\n";
+        }
+    }
+
+    closesocket(clientSock);
+    WSACleanup();
+    return 0;
+}
+```
