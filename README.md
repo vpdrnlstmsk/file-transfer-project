@@ -1,43 +1,25 @@
 # file-transfer-project
-// server.cpp : list / get 명령을 처리하는 TCP 파일 서버
-// 빌드: cl /EHsc server.cpp ws2_32.lib
-
+// server.cpp : list + get 기능 포함 서버 코드
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <winsock2.h>
-#include <windows.h>
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include <string>
+#include <filesystem>
+namespace fs = std::filesystem;
 
 #pragma comment(lib, "ws2_32.lib")
 
-bool endsWith(const std::string& str, const std::string& suffix) {
-    if (str.size() < suffix.size()) return false;
-    return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
-}
-
-// 폴더 내 txt, png 파일 목록 생성
-std::string getFileList() {
-    std::string result = "";
-    WIN32_FIND_DATAA data;
-
-    HANDLE hFind = FindFirstFileA("*.*", &data);
-    if (hFind == INVALID_HANDLE_VALUE) return "";
-
-    do {
-        if (!(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-            std::string name = data.cFileName;
-
-            if (endsWith(name, ".txt") || endsWith(name, ".png")) {
-                result += name + "\n";
-            }
+std::vector<std::string> getFileList() {
+    std::vector<std::string> list;
+    for (auto& entry : fs::directory_iterator(".")) {
+        if (entry.path().extension() == ".txt" ||
+            entry.path().extension() == ".png") {
+            list.push_back(entry.path().filename().string());
         }
-    } while (FindNextFileA(hFind, &data));
-
-    FindClose(hFind);
-
-    result += "END\n";  // 목록의 끝 표시
-    return result;
+    }
+    return list;
 }
 
 int main() {
@@ -46,7 +28,7 @@ int main() {
 
     SOCKET serverSock = socket(AF_INET, SOCK_STREAM, 0);
 
-    sockaddr_in serverAddr{};
+    sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
     serverAddr.sin_port = htons(9000);
@@ -54,53 +36,60 @@ int main() {
     bind(serverSock, (SOCKADDR*)&serverAddr, sizeof(serverAddr));
     listen(serverSock, 1);
 
-    std::cout << "[서버] 클라이언트 접속 대기...\n";
+    std::cout << "[서버] 클라이언트 접속 대기 중...\n";
 
-    sockaddr_in clientAddr{};
+    sockaddr_in clientAddr;
     int clientSize = sizeof(clientAddr);
     SOCKET clientSock = accept(serverSock, (SOCKADDR*)&clientAddr, &clientSize);
 
     std::cout << "[서버] 클라이언트 연결됨!\n";
 
+    char cmdBuffer[256];
+
     while (true) {
-        char cmdBuf[256] = {};
-        int recvBytes = recv(clientSock, cmdBuf, sizeof(cmdBuf) - 1, 0);
-        if (recvBytes <= 0) break;
+        memset(cmdBuffer, 0, sizeof(cmdBuffer));
+        int recvLen = recv(clientSock, cmdBuffer, sizeof(cmdBuffer), 0);
+        if (recvLen <= 0) break;
 
-        std::string cmd(cmdBuf);
+        std::string command = cmdBuffer;
+        std::cout << "[서버] 받은 명령: " << command << "\n";
 
-        // ====== list 명령 ======
-        if (cmd == "list") {
-            std::cout << "[서버] list 요청 받음\n";
+        // ---------------------------
+        // LIST 처리
+        // ---------------------------
+        if (command == "list") {
+            auto files = getFileList();
 
-            std::string list = getFileList();
-            send(clientSock, list.c_str(), list.size(), 0);
+            std::string response;
+            for (auto& f : files) response += f + "\n";
+
+            if (response.empty())
+                response = "No files found.\n";
+
+            send(clientSock, response.c_str(), response.size(), 0);
         }
 
-        // ====== get 명령 ======
-        else if (cmd.rfind("get ", 0) == 0) {
-            std::string filename = cmd.substr(4);
-            std::cout << "[서버] get 요청: " << filename << "\n";
+        // ---------------------------
+        // GET 처리
+        // ---------------------------
+        else if (command.rfind("get ", 0) == 0) {
+            std::string filename = command.substr(4);
 
             std::ifstream file(filename, std::ios::binary);
             if (!file) {
-                std::string err = "ERROR\n";
-                send(clientSock, err.c_str(), err.size(), 0);
+                std::string msg = "[서버] 파일 없음\n";
+                send(clientSock, msg.c_str(), msg.size(), 0);
                 continue;
             }
 
             char buffer[1024];
             while (!file.eof()) {
                 file.read(buffer, sizeof(buffer));
-                int bytes = file.gcount();
-                if (bytes > 0) send(clientSock, buffer, bytes, 0);
+                int bytesRead = file.gcount();
+                if (bytesRead > 0)
+                    send(clientSock, buffer, bytesRead, 0);
             }
-
-            std::cout << "[서버] 파일 전송 완료: " << filename << "\n";
-        }
-
-        else {
-            std::cout << "[서버] 알 수 없는 명령: " << cmd << "\n";
+            std::cout << "[서버] 파일 전송 완료\n";
         }
     }
 
