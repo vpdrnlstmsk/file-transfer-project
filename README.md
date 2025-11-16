@@ -1,4 +1,5 @@
 # file-transfer-project
+```cpp
 // server.cpp : list + get 기능 포함 서버 코드
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -99,3 +100,4 @@ int main() {
     WSACleanup();
     return 0;
 }
+```
